@@ -13,6 +13,25 @@ trait Applicative[F[_]] extends Functor[F] {
 
   def traverse[A,B](as: List[A])(f: A => F[B]): F[List[B]] = 
     as.foldRight(unit(List.empty[B])){(a,fbs) => map2(f(a),fbs)(_ :: _) }
+
+  // Exercise 12_8
+  def product[G[_]](G: Applicative[G]): Applicative[({type f[x]=(F[x],G[x])})#f] = {
+    val self = this
+    new Applicative[({type f[x]=(F[x],G[x])})#f] {
+      override def unit[A](a:A): (F[A],G[A]) = (self.unit(a), G.unit(a))
+      override def map2[A,B,C](fa:(F[A],G[A]), fb:(F[B],G[B]))(fu:(A,B) => C): 
+        (F[C],G[C]) = {
+        (self.map2(fa._1,fb._1)(fu), G.map2(fa._2,fb._2)(fu))
+      }
+    }
+  }
+
+  // Exercise 12_12
+  def sequenceMap[K,V](ofa: Map[K,F[V]]): F[Map[K,V]] = {
+    ofa.foldRight[F[Map[K,V]]](unit(Map.empty[K,V])){case ((k,fv),fm) =>
+      map2[Map[K,V],V,Map[K,V]](fm,fv){case (m,v) => m + (k -> v)}
+    }
+  }
 }
 
 object Exercise_12_3 {
