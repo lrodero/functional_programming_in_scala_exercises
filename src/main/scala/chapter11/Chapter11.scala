@@ -83,6 +83,7 @@ case class State[S,A](run: S => (A,S)) {
   }
 }
 
+// Exercise 11_20
 case class Reader[R,A](run: R => A) {
   def map[B](f: A => B): Reader[R,B] = Reader { (r:R) =>
     f(run(r))
@@ -125,6 +126,7 @@ object Monad {
 
   def stateMonad[S]: StateMonad[S] = new StateMonad[S] { }
 
+  // Exercise 11_20
   trait ReaderMonad[R] extends Monad[({type f[x] = Reader[R,x]})#f] {
     def unit[A](a: A): Reader[R,A] = Reader(s => a)
     def flatMap[A,B](rd: Reader[R,A])(f: A => Reader[R,B]): Reader[R,B] =
