@@ -83,6 +83,17 @@ case class State[S,A](run: S => (A,S)) {
   }
 }
 
+case class Reader[R,A](run: R => A) {
+  def map[B](f: A => B): Reader[R,B] = Reader { (r:R) =>
+    f(run(r))
+  }
+  def flatMap[B](f: A => Reader[R,B]): Reader[R,B] = Reader { (r:R) =>
+    f(run(r)) match {
+      case Reader(run2) => run2(r)
+    }
+  }
+}
+
 object Monad {
 
   val idMonad = new Monad[Id] {
@@ -107,10 +118,20 @@ object Monad {
   }
 
   trait StateMonad[S] extends Monad[({type f[x] = State[S,x]})#f] {
-    def unit[A](a: => A): State[S,A] = State(s => (a,s))
+    def unit[A](a: A): State[S,A] = State(s => (a,s))
     def flatMap[A,B](st: State[S,A])(f: A => State[S,B]): State[S,B] = 
       st flatMap f
   }
+
+  def stateMonad[S]: StateMonad[S] = new StateMonad[S] { }
+
+  trait ReaderMonad[R] extends Monad[({type f[x] = Reader[R,x]})#f] {
+    def unit[A](a: A): Reader[R,A] = Reader(s => a)
+    def flatMap[A,B](rd: Reader[R,A])(f: A => Reader[R,B]): Reader[R,B] =
+      rd flatMap f
+  }
+
+  def readerMonad[S]: ReaderMonad[S] = new ReaderMonad[S] { }
 
 }
 
