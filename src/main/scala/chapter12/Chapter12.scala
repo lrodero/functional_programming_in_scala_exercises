@@ -11,8 +11,29 @@ trait Applicative[F[_]] extends Functor[F] {
   override def map[A,B](fa:F[A])(f: A => B): F[B] = 
     map2(fa,unit(()))((a,_) => f(a))
 
-  def traverse[A,B](as: List[A])(f: A => F[B]): F[List[B]] = 
-    as.foldRight(unit(List.empty[B])){(a,fbs) => map2(f(a),fbs)(_ :: _) }
+  // Exercise 12_1
+  def sequence[A](fas: List[F[A]]): F[List[A]] = fas match {
+    case Nil => unit(List[A]())
+    case fa :: tail => map2(fa, sequence(tail))(_ :: _)
+  }
+  def replicateM[A](n:Int, fa: F[A]): F[List[A]] =
+    sequence(List.fill(n)(fa))
+  def product[A,B](fa: F[A], fb: F[B]): F[(A,B)] =
+    map2(fa,fb)((_,_))
+
+  // Exercise 12_2
+  def apply[A,B](fab: F[A => B])(fa: F[A]): F[B] =
+    map2(fab,fa)((f2,a) => f2(a))
+  def mapInTermsOfApplyAndUnit[A,B](fa: F[A])(f: A => B): F[B] =
+    apply(unit(f))(fa)
+  def map2InTermsOfApplyAndUnit[A,B,C](fa: F[A], fb: F[B])(f: (A,B) => C): F[C] =
+    map(apply(apply(unit((a:A) => ((b:B) => (a,b))))(fa))(fb))(f.tupled)
+
+  // Exercise 12_3
+  def map3[A,B,C,D](fa: F[A], fb: F[B], fc: F[C])(f: (A,B,C) => D): F[D] =
+    apply(apply(apply(unit(f.curried): F[A => (B => (C => D))])(fa))(fb))(fc) 
+  def map4[A,B,C,D,E](fa: F[A], fb: F[B], fc: F[C], fd: F[D])(f: (A,B,C,D) => E): F[E] =
+    apply(apply(apply(apply(unit(f.curried): F[A => (B => (C => (D => E)))])(fa))(fb))(fc))(fd)
 
   // Exercise 12_8
   def product[G[_]](G: Applicative[G]): Applicative[({type f[x]=(F[x],G[x])})#f] = {
@@ -32,6 +53,24 @@ trait Applicative[F[_]] extends Functor[F] {
       map2[Map[K,V],V,Map[K,V]](fm,fv){case (m,v) => m + (k -> v)}
     }
   }
+
+  // Exercise 12_13
+  def traverse[A,B](as: List[A])(f: A => F[B]): F[List[B]] = 
+    as.foldRight(unit(List.empty[B])){(a,fbs) => map2(f(a),fbs)(_ :: _) }
+  def traverse[A,B](oa: Option[A])(f: A => F[B]): F[Option[B]] = oa match {
+    case None => unit(None)
+    case Some(a) => map(f(a))(Some(_))
+  }
+  case class Tree[+A](head: A, tail:List[Tree[A]])
+  def traverse[A,B](ta: Tree[A])(f: A => F[B]): F[Tree[B]] = ta match {
+    case Tree(h, t) => {
+      val fh: F[B] = f(h)
+      
+      ???
+    }
+  }
+
+
 }
 
 object Exercise_12_3 {
