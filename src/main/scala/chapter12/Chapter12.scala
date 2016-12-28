@@ -64,6 +64,17 @@ trait Applicative[F[_]] extends Functor[F] { self => // See 12_8 and 12_9
   trait Traversable[F[_]] extends Functor[F] {
     def traverse[G[_]: Applicative,A,B](fa: F[A])(f: A => G[B]): G[F[B]] = sequence(map(fa)(f))
     def sequence[G[_]:Applicative,A](fga: F[G[A]]): G[F[A]] = traverse(fga)(ga => ga)
+    // Exercise 12_14
+    case class Id[A](a: A)
+    implicit val appId = new Applicative[Id] {
+      override def unit[A](a:A): Id[A] = Id(a)
+      override def map2[A,B,C](ida: Id[A], idb: Id[B])(f: (A,B) => C): Id[C] = (ida,idb) match {
+        case (Id(a),Id(b)) => Id(f(a,b))
+      }
+    }
+    override def map[A,B](fa: F[A])(f: A => B): F[B] = traverse(fa)((a:A) => Id(f(a))) match {
+      case Id(fb) => fb
+    }
   }
   val traversableList: Traversable[List] = new Traversable[List] {
     override def map[A,B](la: List[A])(f: A => B): List[B] = la map f // Functor function, also required
