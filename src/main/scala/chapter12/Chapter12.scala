@@ -4,7 +4,7 @@ import scala.language.higherKinds
 
 import chapter11.Functor
 
-trait Applicative[F[_]] extends Functor[F] {
+trait Applicative[F[_]] extends Functor[F] { self => // See 12_8 and 12_9
   def unit[A](a:A): F[A]
   def map2[A,B,C](fa:F[A], fb:F[B])(f:(A,B) => C): F[C]
 
@@ -37,7 +37,6 @@ trait Applicative[F[_]] extends Functor[F] {
 
   // Exercise 12_8
   def product[G[_]](G: Applicative[G]): Applicative[({type f[x]=(F[x],G[x])})#f] = {
-    val self = this
     new Applicative[({type f[x]=(F[x],G[x])})#f] {
       override def unit[A](a:A): (F[A],G[A]) = (self.unit(a), G.unit(a))
       override def map2[A,B,C](fa:(F[A],G[A]), fb:(F[B],G[B]))(fu:(A,B) => C): 
@@ -45,6 +44,13 @@ trait Applicative[F[_]] extends Functor[F] {
         (self.map2(fa._1,fb._1)(fu), G.map2(fa._2,fb._2)(fu))
       }
     }
+  }
+
+  // Exercise 12_9
+  def compose[G[_]](ag:Applicative[G]): Applicative[({type f[x] = F[G[x]]})#f] = new Applicative[({type f[x] = F[G[x]]})#f] {
+    def unit2[A](a:A): G[A] = ag.unit(a)
+    override def unit[A](a:A): F[G[A]] = self.unit(ag.unit(a))
+    override def map2[A,B,C](fga: F[G[A]], fgb: F[G[B]])(f: (A,B) => C): F[G[C]] = self.map2(fga,fgb){case (ga,gb) => ag.map(ag.product(ga,gb))(f.tupled)}
   }
 
   // Exercise 12_12
