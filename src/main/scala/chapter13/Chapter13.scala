@@ -94,7 +94,8 @@ object Chapter13 {
       }
       override def flatMap[A,B](ioa: IO[A])(f: A => IO[B]): IO[B] =
         ioa flatMap f
-      override def map2[A,B,C](ioa: IO[A], iob: IO[B])(f: (A,B) => C): IO[C] = flatMap(ioa)(a => map(iob)(b => f(a,b))) 
+      override def map2[A,B,C](ioa: IO[A], iob: IO[B])(f: (A,B) => C): IO[C] =
+        flatMap(ioa)(a => map(iob)(b => f(a,b))) 
       def apply[A](a: => A): IO[A] = new IO[A] {
         override def run: A = a
       }
@@ -120,27 +121,73 @@ object Chapter13 {
     } yield ()
   }
 
-  sealed trait IO[A] { self =>
-    def flatMap[B](f: A => IO[B]): IO[B] = 
-      FlatMap(self, f)
-    def map[B](f: A => B): IO[B] = 
-      flatMap(a => Return(f(a)))
+  object StackSafeIO {
+
+    sealed trait IO[A] { self =>
+      def flatMap[B](f: A => IO[B]): IO[B] = 
+        FlatMap(self, f)
+      def map[B](f: A => B): IO[B] = 
+        flatMap(a => Return(f(a)))
+    }
+    case class Return[A](a: A) extends IO[A]
+    case class Suspend[A](resume: () => A) extends IO[A]
+    case class FlatMap[A,B](ioa: IO[A], f: A => IO[B]) extends IO[B]
+
+    object IO extends Monad[IO] with Applicative[IO] {
+      override def unit[A](a: A): IO[A] = Return(a)
+      override def flatMap[A,B](ioa: IO[A])(f: A => IO[B]): IO[B] = FlatMap(ioa,f)
+      // Have to overwrite map as in Applicative it is implemented using map2 and
+      // here map2 is implemented using map (we have to avoid such circular dependency)
+      override def map[A,B](ioa: IO[A])(f: A => B): IO[B] =
+        FlatMap(ioa, (a:A) => unit(f(a)))
+      override def map2[A,B,C](ioa: IO[A], iob: IO[B])(f: (A,B) => C): IO[C] =
+        FlatMap(ioa, (a:A) => map(iob)((b:B) => f(a,b)))
+    }
+
+    def printLine(s: String): IO[Unit] = Suspend(() => Return(println(s)))
+
+    @annotation.tailrec
+    def run[A](io: IO[A]): A = io match {
+      case Return(a) => a
+      case Suspend(resume) => resume()
+      case FlatMap(ioa, f) => ioa match {
+        case Return(a) => run(f(a))
+        case Suspend(resume) => run(f(resume()))
+        case FlatMap(iob, g) => run(iob flatMap (b => g(b) flatMap f))
+      }
+    }
+
+    run(printLine("hola"))
+    run(IO.replicateM(2,printLine("hola")))
   }
-  case class Return[A](a: A) extends IO[A]
-  case class Suspend[A](resume: () => A) extends IO[A]
-  case class FlatMap[A,B](ioa: IO[A], f: A => IO[B]) extends IO[B]
 
-  def printLine(s: String): IO[Unit] = Suspend(() => Return(println(s)))
-
-  @annotation.tailrec
-  def run[A](io: IO[A]): A = io match {
-    case Return(a) => a
-    case Suspend(resume) => resume()
-    case FlatMap(ioa, f) => ioa match {
-      case Return(a) => run(f(a))
-      case Suspend(resume) => run(f(resume()))
-      case FlatMap(iob, g) => run(iob flatMap (b => g(b) flatMap f))
+  sealed trait Free[F[_],A] { self =>
+    // Exercise 13_1
+    def map[B](f: A => B): Free[F,B] = 
+      flatMap(f andThen ((b:B) => Return(b)))
+    def flatMap[B](f: A => Free[F,B]): Free[F,B] = 
+      FlatMap(self, f)
+    def freeMonad[F[_]]: Monad[({type f[x]=Free[F,x]})#f] = new Monad[({type f[x]=Free[F,x]})#f] {
+      override def unit[A](a:A): Free[F,A] = Return(a)
+      override def flatMap[A,B](fa: Free[F,A])(f: A => Free[F,B]): Free[F,B] = fa flatMap f
     }
   }
+  case class Return[F[_],A](a: A) extends Free[F,A]
+  case class Suspend[F[_],A](s: F[A]) extends Free[F,A]
+  case class FlatMap[F[_],A,B](s: Free[F,A], f: A => Free[F,B]) extends Free[F,B]
+  // Exercise 13_2
+  @annotation.tailrec
+  def runTrampoline[A](free: Free[Function0,A]): A = free match {
+    case Return(a) => a
+    case Suspend(s) => s()
+    case FlatMap(s, f) => s match {
+      case Return(a) => runTrampoline(f(a))
+      case Suspend(s) => runTrampoline(f(s()))
+      case FlatMap(f0a, g) => runTrampoline(f0a flatMap (a => g(a) flatMap f))
+    }
+  }
+  // Exercuse 13_3
+  def run[F[_],A](free: Free[F,A])(implicit monad: Monad[F]): F[A] = ???
+
 
 }
