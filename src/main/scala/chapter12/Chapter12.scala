@@ -60,58 +60,6 @@ trait Applicative[F[_]] extends Functor[F] { self => // See 12_8 and 12_9
     }
   }
 
-  // Exercise 12_13
-  trait Traversable[F[_]] extends Functor[F] {
-    def traverse[G[_]: Applicative,A,B](fa: F[A])(f: A => G[B]): G[F[B]] = sequence(map(fa)(f))
-    def sequence[G[_]:Applicative,A](fga: F[G[A]]): G[F[A]] = traverse(fga)(ga => ga)
-    // Exercise 12_14
-    case class Id[A](a: A)
-    implicit val appId = new Applicative[Id] {
-      override def unit[A](a:A): Id[A] = Id(a)
-      override def map2[A,B,C](ida: Id[A], idb: Id[B])(f: (A,B) => C): Id[C] = (ida,idb) match {
-        case (Id(a),Id(b)) => Id(f(a,b))
-      }
-    }
-    override def map[A,B](fa: F[A])(f: A => B): F[B] = traverse(fa)((a:A) => Id(f(a))) match {
-      case Id(fb) => fb
-    }
-  }
-  val traversableList: Traversable[List] = new Traversable[List] {
-    override def map[A,B](la: List[A])(f: A => B): List[B] = la map f // Functor function, also required
-    //override def traverse[G[_]: Applicative,A,B](as: List[A])(f: A => G[B]): G[List[B]] = ??? traverse is defined in terms of sequence, so no need to rewrite it
-    override def sequence[G[_]: Applicative,A](lga: List[G[A]]): G[List[A]] = {
-      val appg = implicitly[Applicative[G]]
-      lga.foldRight(appg.unit(List.empty[A])){ (ga,gla) => appg.map2(ga,gla)((a,as) => a :: as) }
-    }
-  }
-  val traversableOption: Traversable[Option] = new Traversable[Option] {
-    override def map[A,B](oa: Option[A])(f: A => B): Option[B] = oa map f // Functor function, also required
-    //override def traverse[G[_]: Applicative,A,B](as: Option[A])(f: A => G[B]): G[Option[B]] = ??? traverse is defined in terms of sequence, so no need to rewrite it
-    override def sequence[G[_]: Applicative,A](lga: Option[G[A]]): G[Option[A]] = {
-      val appg = implicitly[Applicative[G]]
-      lga match {
-        case None => appg.unit[Option[A]](None)
-        case Some(ga) => appg.map(ga)((a:A) => Some(a))
-      }
-    }
-  }
-  case class Tree[+T](head: T, tail: List[Tree[T]])
-  val traversableTree: Traversable[Tree] = new Traversable[Tree] {
-    override def map[A,B](ta: Tree[A])(f: A => B): Tree[B] = ta match { // Functor function, also required
-      case Tree(head, tail) => Tree(f(head), tail.map(tree => traversableTree.map(tree)(f)))
-    }
-    //override def traverse[G[_]: Applicative,A,B](as: Tree[A])(f: A => G[B]): G[Tree[B]] = ??? traverse is defined in terms of sequence, so no need to rewrite it
-    override def sequence[G[_]: Applicative,A](tga: Tree[G[A]]): G[Tree[A]] = {
-      val appg = implicitly[Applicative[G]]
-      tga match {
-        case Tree(ga, ltga) => {
-          val lgta: List[G[Tree[A]]] = ltga.map((tga:Tree[G[A]]) => sequence(tga))
-          val glta: G[List[Tree[A]]] = traversableList.sequence(lgta)
-          appg.map2(ga, glta)( (a, lta) => Tree(a,lta) )
-        }
-      }
-    }
-  }
 
 }
 
@@ -173,29 +121,57 @@ object Exercise_12_6 {
     }
 }
 
-object Listing_12_5 extends App {
-  import java.text._
-  import java.util.Date
-  def validName(name: String): Validation[String, String] = {
-    if (name != "") Success(name)
-    else Failure("Name cannot be empty")
-  }
-  def validBirthdate(birthdate: String): Validation[String, Date] = {
-    try {
-      Success((new SimpleDateFormat("yyyy-MM-dd")).parse(birthdate))
-    } catch {
-      case _: Throwable => Failure("Birthdate must be in the form yyyy-MM-dd")
+object Exercises_12_13_And_12_14 {
+  // Exercise 12_13
+  trait Traversable[F[_]] extends Functor[F] {
+    def traverse[G[_]: Applicative,A,B](fa: F[A])(f: A => G[B]): G[F[B]] = sequence(map(fa)(f))
+    def sequence[G[_]:Applicative,A](fga: F[G[A]]): G[F[A]] = traverse(fga)(ga => ga)
+    // Exercise 12_14
+    case class Id[A](a: A)
+    implicit val appId = new Applicative[Id] {
+      override def unit[A](a:A): Id[A] = Id(a)
+      override def map2[A,B,C](ida: Id[A], idb: Id[B])(f: (A,B) => C): Id[C] = (ida,idb) match {
+        case (Id(a),Id(b)) => Id(f(a,b))
+      }
+    }
+    override def map[A,B](fa: F[A])(f: A => B): F[B] = traverse(fa)((a:A) => Id(f(a))) match {
+      case Id(fb) => fb
     }
   }
-  def validPhone(phoneNumber: String): Validation[String, String] = {
-    if (phoneNumber.matches("[0-9]{10}")) Success(phoneNumber)
-    else Failure("Phone number must be 10 digits")
+  val traversableList: Traversable[List] = new Traversable[List] {
+    override def map[A,B](la: List[A])(f: A => B): List[B] = la map f // Functor function, also required
+    //override def traverse[G[_]: Applicative,A,B](as: List[A])(f: A => G[B]): G[List[B]] = ??? traverse is defined in terms of sequence, so no need to rewrite it
+    override def sequence[G[_]: Applicative,A](lga: List[G[A]]): G[List[A]] = {
+      val appg = implicitly[Applicative[G]]
+      lga.foldRight(appg.unit(List.empty[A])){ (ga,gla) => appg.map2(ga,gla)((a,as) => a :: as) }
+    }
   }
-  case class WebForm(name: String, birthDate: String, phone: String)
-  // Can't make it work!
-//  def validWebForm(name: String, birthDate: String, phone: String): Validation[String, WebForm] = {
-//    implicit val va: Applicative[({type f[x]=Validation[String,x]})#f] = Exercise_12_6.ValidationApplicative[String]
-
-//    Exercise_12_3.map3(validName(name), validBirthdate(birthDate), validPhone(phone))(WebForm(_,_,_))
-//  }
+  val traversableOption: Traversable[Option] = new Traversable[Option] {
+    override def map[A,B](oa: Option[A])(f: A => B): Option[B] = oa map f // Functor function, also required
+    //override def traverse[G[_]: Applicative,A,B](as: Option[A])(f: A => G[B]): G[Option[B]] = ??? traverse is defined in terms of sequence, so no need to rewrite it
+    override def sequence[G[_]: Applicative,A](lga: Option[G[A]]): G[Option[A]] = {
+      val appg = implicitly[Applicative[G]]
+      lga match {
+        case None => appg.unit[Option[A]](None)
+        case Some(ga) => appg.map(ga)((a:A) => Some(a))
+      }
+    }
+  }
+  case class Tree[+T](head: T, tail: List[Tree[T]])
+  val traversableTree: Traversable[Tree] = new Traversable[Tree] {
+    override def map[A,B](ta: Tree[A])(f: A => B): Tree[B] = ta match { // Functor function, also required
+      case Tree(head, tail) => Tree(f(head), tail.map(tree => traversableTree.map(tree)(f)))
+    }
+    //override def traverse[G[_]: Applicative,A,B](as: Tree[A])(f: A => G[B]): G[Tree[B]] = ??? traverse is defined in terms of sequence, so no need to rewrite it
+    override def sequence[G[_]: Applicative,A](tga: Tree[G[A]]): G[Tree[A]] = {
+      val appg = implicitly[Applicative[G]]
+      tga match {
+        case Tree(ga, ltga) => {
+          val lgta: List[G[Tree[A]]] = ltga.map((tga:Tree[G[A]]) => sequence(tga))
+          val glta: G[List[Tree[A]]] = traversableList.sequence(lgta)
+          appg.map2(ga, glta)( (a, lta) => Tree(a,lta) )
+        }
+      }
+    }
+  }
 }
